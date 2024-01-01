@@ -21,8 +21,9 @@ CREATE TABLE dbTraxl.topics
 (
     PkTopic   bigserial NOT NULL,
     TopicName text NOT NULL,
+    FkUser    bigint NOT NULL,  
     CONSTRAINT PK_topics PRIMARY KEY ( PkTopic ),
-    CONSTRAING FK_User FOREIGN KEY ( PkTopic ) REFERENCES dbTraxl.users ( PkUser )
+    CONSTRAINT FK_User FOREIGN KEY ( FkUser ) REFERENCES dbTraxl.users ( PkUser )
 );
 
 
