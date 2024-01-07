@@ -22,6 +22,12 @@ SELECT *
 FROM dbtraxl.users
 WHERE PkUser = $1;
 
+-- name: GetUserByName :one
+-- get a particular user by username
+SELECT *
+FROM dbTraxl.users
+WHERE username = $1;
+
 -- name: GetUserTopics :many
 -- get topics for a particular user
 SELECT u.PkUser, t.PkTopic, t.TopicName
@@ -102,7 +108,7 @@ INSERT INTO dbTraxl.users (userName, PasswordHash, name )
 VALUES ($1,
         $2,
         $3) RETURNING *;
-        
+
 
 
 

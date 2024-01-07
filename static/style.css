@@ -1,0 +1,12 @@
+header{
+    font-size: 2em;
+    background: radial-gradient(blue, lightblue);
+    color: white;
+    font-family: papyrus, cursive;
+}
+form div{
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-top: 10%;
+}
