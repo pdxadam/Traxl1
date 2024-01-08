@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 	dbTraxl "traxl/gen"
+	"traxl/pkg"
 
 	"github.com/gorilla/mux"
 
@@ -60,8 +61,11 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 }
 func validateUser(username string, password string) bool {
 	ctx := context.Background()
-	dbQuery.GetUserByName(ctx, username)
-	return true
+	u, _ := dbQuery.GetUserByName(ctx, username)
+	if u.Username != username {
+		return false
+	}
+	return pkg.CheckPasswordHash(password, u.Passwordhash)
 }
 
 func main() {
