@@ -15,8 +15,10 @@ import (
 	dbTraxl "traxl/gen"
 	"traxl/pkg"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
+	rstore "github.com/rbcervilla/redisstore/v8"
 
 	_ "github.com/lib/pq"
 )
@@ -32,8 +34,8 @@ var (
 	tmplEmbed embed.FS
 
 	dbQuery *dbTraxl.Queries
-
-	store = sessions.NewCookieStore([]byte("forDemo"))
+	store   *rstore.RedisStore
+	cStore  = sessions.NewCookieStore([]byte("forDemo"))
 )
 
 type staticHandler struct {
@@ -57,7 +59,7 @@ func (h staticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 }
 func renderFiles(tmpl string, w http.ResponseWriter, d interface{}) {
-	log.Println("Rendering " + tmpl)
+
 	t, err := template.ParseFS(tmplEmbed, fmt.Sprintf("tmpl/%s.html", tmpl))
 	if err != nil {
 		log.Fatal(err)
@@ -88,7 +90,7 @@ func securityMiddleware(next http.Handler) http.Handler {
 	})
 }
 func sessionValid(w http.ResponseWriter, r *http.Request) bool {
-	session, _ := store.Get(r, "session_token")
+	session, _ := cStore.Get(r, "session_token")
 	return !session.IsNew
 
 }
@@ -108,7 +110,7 @@ func authenticationHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 func hasBeenAuthenticated(w http.ResponseWriter, r *http.Request) bool {
-	session, _ := store.Get(r, "session_token")
+	session, _ := cStore.Get(r, "session_token")
 	a, _ := session.Values["authenticated"]
 
 	if a == nil {
@@ -118,7 +120,7 @@ func hasBeenAuthenticated(w http.ResponseWriter, r *http.Request) bool {
 
 }
 func storeAuthenticated(w http.ResponseWriter, r *http.Request, v bool) {
-	session, _ := store.Get(r, "session_token")
+	session, _ := cStore.Get(r, "session_token")
 	session.Values["authenticated"] = v
 	err := session.Save(r, w)
 	if err != nil {
@@ -137,61 +139,9 @@ func validateUser(username string, password string) bool {
 }
 
 func main() {
-	// port := "9004"
 
-	// if value, exists := os.LookupEnv("SERVER_PORT"); exists {
-	// 	port = value
-	// }
-	// log.Println(port)
-	/*---- Unused Code right now
-	connecting to the database
-			------------------------*/
-	// dbURI := fmt.Sprintf("%s?sslmode=disable",
-	// 	GetAsString("PSQLURL", "Fail"))
-	//
-	// db, err := sql.Open("postgres", dbURI)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// if err := db.Ping(); err != nil {
-	// 	log.Fatalln("Error from database ping:", err)
-	// }
-	// st := dbTraxl.New(db)
-	// ctx := context.Background()
-	/*----- Example
-	     Creates a new user, create a topic, create an instance, list users
-		 ------------------------------- */
-	// newUser, err := st.CreateUsers(ctx, dbTraxl.CreateUsersParams{
-	// 	Username:     "testuser",
-	// 	Passwordhash: "hash",
-	// 	Name:         "test",
-	// })
-	// if err != nil {
-	// 	log.Fatalln("Error creating user :", err)
-	// }
-	// eid, err := st.InsertTopic(ctx, dbTraxl.InsertTopicParams{
-	// 	Topicname: "testTopic",
-	// 	Fkuser:    newUser.Pkuser,
-	// })
-	// if err != nil {
-	// 	log.Fatalln("Error inserting Topic", err)
-
-	// }
-	// _, err = st.InsertInstance(ctx, dbTraxl.InsertInstanceParams{
-	// 	StartDate: time.Now(),
-	// 	Fktopic:   eid,
-	// 	Fkuser:    newUser.Pkuser,
-	// })
-	// if err != nil {
-	// 	log.Fatalln("Error inserting Instance: ", err)
-	// }
-	// log.Println("All done.")
-	// u, err := st.ListUsers(ctx)
-	// for _, usr := range u {
-	// 	fmt.Println(fmt.Sprintf("Name : %s, ID : %d", usr.Name, usr.Pkuser))
-
-	// }
 	initDatabase()
+	initRedis()
 	// makeTestUser()
 	//router/server setup
 	router := mux.NewRouter()
@@ -224,14 +174,25 @@ func main() {
 		ReadTimeout:  15 * time.Second,
 	}
 	//start the server
+	log.Println("Beginning to listen...")
 	log.Fatal(srv.ListenAndServe())
+}
+func initRedis() {
+	var err error
+	client := redis.NewClient(&redis.Options{
+		Addr: "192.168.50.124:6379",
+	})
+	store, err = rstore.NewRedisStore(context.Background(), client)
+	if err != nil {
+		log.Fatal("failed to create redis store: ", err)
+	}
+	store.KeyPrefix("session_token")
 }
 func initDatabase() {
 	log.Println("Initializing Database")
 
 	dbURI := fmt.Sprintf("%s?sslmode=disable",
 		GetAsString("PSQLURL", "Fail"))
-	log.Println(dbURI)
 	db, err := sql.Open("postgres", dbURI)
 	if err != nil {
 		panic(err)
