@@ -17,9 +17,9 @@ import (
 
 	"github.com/go-redis/redis/v8"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	rstore "github.com/rbcervilla/redisstore/v8"
 
+	// rstore "github.com/redis/go-redis/v9"
 	_ "github.com/lib/pq"
 )
 
@@ -35,7 +35,7 @@ var (
 
 	dbQuery *dbTraxl.Queries
 	store   *rstore.RedisStore
-	cStore  = sessions.NewCookieStore([]byte("forDemo"))
+	// cStore  = sessions.NewCookieStore([]byte("forDemo"))
 )
 
 type staticHandler struct {
@@ -90,8 +90,21 @@ func securityMiddleware(next http.Handler) http.Handler {
 	})
 }
 func sessionValid(w http.ResponseWriter, r *http.Request) bool {
-	session, _ := cStore.Get(r, "session_token")
+	session, _ := store.Get(r, "session_token")
 	return !session.IsNew
+
+}
+func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	if hasBeenAuthenticated(w, r) {
+		session, _ := store.Get(r, "session_token")
+		session.Options.MaxAge = -1
+		err := session.Save(r, w)
+		if err != nil {
+			log.Println("failed to delete session", err)
+
+		}
+	}
+	http.Redirect(w, r, "/login", 307)
 
 }
 func authenticationHandler(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +114,7 @@ func authenticationHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println(r.FormValue("password"))
 	if validateUser(r.FormValue("username"), r.FormValue("password")) {
 		//TODO: do the store authenticated part
+		storeAuthenticated(w, r, true)
 		result = result + "successful"
 	} else {
 		result = result + "unsuccesful"
@@ -110,7 +124,7 @@ func authenticationHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 func hasBeenAuthenticated(w http.ResponseWriter, r *http.Request) bool {
-	session, _ := cStore.Get(r, "session_token")
+	session, _ := store.Get(r, "session_token")
 	a, _ := session.Values["authenticated"]
 
 	if a == nil {
@@ -120,7 +134,7 @@ func hasBeenAuthenticated(w http.ResponseWriter, r *http.Request) bool {
 
 }
 func storeAuthenticated(w http.ResponseWriter, r *http.Request, v bool) {
-	session, _ := cStore.Get(r, "session_token")
+	session, _ := store.Get(r, "session_token")
 	session.Values["authenticated"] = v
 	err := session.Save(r, w)
 	if err != nil {
@@ -162,6 +176,7 @@ func main() {
 	//add /login path
 	router.PathPrefix("/login").Handler(securityMiddleware(http.StripPrefix("/login", static)))
 
+	router.HandleFunc("/logout", logoutHandler).Methods("GET")
 	//root will redirect to /app
 	router.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/app", http.StatusPermanentRedirect)
@@ -186,6 +201,7 @@ func initRedis() {
 	if err != nil {
 		log.Fatal("failed to create redis store: ", err)
 	}
+
 	store.KeyPrefix("session_token")
 }
 func initDatabase() {
